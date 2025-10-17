@@ -1,4 +1,7 @@
+streamlit
+Pillow
+numpy
 opencv-python-headless
-pytesseract
 matplotlib
+pytesseract
 ultralytics
