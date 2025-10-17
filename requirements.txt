@@ -1,7 +1,7 @@
 streamlit
 Pillow
 numpy
-opencv-python-headless
+opencv-python
 matplotlib
 pytesseract
 ultralytics
