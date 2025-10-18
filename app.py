@@ -2,6 +2,8 @@ import streamlit as st
 from PIL import Image, ImageOps
 import numpy as np
 import cv2
+from skimage.segmentation import slic
+from skimage.color import label2rgb
 
 # ===============================================================
 # 🔧 Funções Utilitárias
@@ -90,9 +92,6 @@ def segment_contours(image):
     cv2.drawContours(result, contours, -1, (255, 0, 0), 2)
     return Image.fromarray(result)
 
-# ===============================================================
-# 🌈 Segmentação por canais RGB e HSV
-# ===============================================================
 def segment_rgb_channels(image):
     img = ensure_rgb(image)
     r, g, b = cv2.split(img)
@@ -109,6 +108,32 @@ def segment_hsv_channels(image):
     s_img = cv2.merge([s, s, s])
     v_img = cv2.merge([v, v, v])
     return Image.fromarray(h_img), Image.fromarray(s_img), Image.fromarray(v_img)
+
+def segment_watershed(image):
+    img = ensure_rgb(image)
+    gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    kernel = np.ones((3,3), np.uint8)
+    opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
+    sure_bg = cv2.dilate(opening, kernel, iterations=3)
+    dist_transform = cv2.distanceTransform(opening, cv2.DIST_L2, 5)
+    _, sure_fg = cv2.threshold(dist_transform, 0.7*dist_transform.max(), 255, 0)
+    sure_fg = np.uint8(sure_fg)
+    unknown = cv2.subtract(sure_bg, sure_fg)
+    _, markers = cv2.connectedComponents(sure_fg)
+    markers = markers + 1
+    markers[unknown==255] = 0
+    markers = cv2.watershed(img, markers)
+    result = img.copy()
+    result[markers == -1] = [255, 0, 0]
+    return Image.fromarray(result)
+
+def segment_superpixel(image, n_segments):
+    img = ensure_rgb(image)
+    segments = slic(img, n_segments=n_segments, compactness=10, start_label=1)
+    segmented_img = label2rgb(segments, img, kind='avg')
+    segmented_img = np.uint8(segmented_img*255)
+    return Image.fromarray(segmented_img)
 
 # ===============================================================
 # 🔍 Filtros de Detecção de Características
@@ -181,10 +206,12 @@ st.sidebar.subheader("Abordagens de Segmentação")
 segmentation_type = st.sidebar.selectbox(
     "Tipo de Segmentação",
     ["Nenhum","Limiarização Simples","Limiarização Adaptativa","K-Means",
-     "Detecção de Bordas (Canny)","Contornos","Segmentação por Canais RGB/HSV"]
+     "Detecção de Bordas (Canny)","Contornos","Segmentação por Canais RGB/HSV",
+     "Watershed","Superpixel (SLIC)"]
 )
 threshold_value = st.sidebar.slider("Valor do Limiar", 0, 255, 127)
 k_value = st.sidebar.slider("Número de Clusters (K-Means)", 2, 10, 3)
+n_superpixels = st.sidebar.slider("Número de Superpixels (SLIC)", 50, 500, 100, step=10)
 
 st.sidebar.subheader("Filtros de Detecção de Características")
 feature_type = st.sidebar.selectbox(
@@ -204,8 +231,6 @@ if uploaded_file is not None:
     if filter_type != "Nenhum":
         image = apply_noise_filter(image, filter_type, kernel_size)
 
-    mask_image = None
-
     # Segmentação
     if segmentation_type == "Limiarização Simples":
         image = segment_threshold(image, threshold_value)
@@ -220,26 +245,22 @@ if uploaded_file is not None:
     elif segmentation_type == "Segmentação por Canais RGB/HSV":
         st.subheader("Canais RGB")
         r_img, g_img, b_img = segment_rgb_channels(image)
-    
-        # Cada canal em linha separada
         st.image(r_img, caption="R", use_container_width=True)
         st.image(g_img, caption="G", use_container_width=True)
         st.image(b_img, caption="B", use_container_width=True)
-    
+
         st.subheader("Canais HSV")
         h_img, s_img, v_img = segment_hsv_channels(image)
-    
-        # Cada canal em linha separada
         st.image(h_img, caption="H", use_container_width=True)
         st.image(s_img, caption="S", use_container_width=True)
         st.image(v_img, caption="V", use_container_width=True)
-
-
-
-
+    elif segmentation_type == "Watershed":
+        image = segment_watershed(image)
+    elif segmentation_type == "Superpixel (SLIC)":
+        image = segment_superpixel(image, n_superpixels)
 
     # Conversão para grayscale (após segmentação)
-    if grayscale:
+    if grayscale and segmentation_type not in ["Segmentação por Canais RGB/HSV"]:
         image = convert_to_grayscale(image)
 
     # Filtros de Características
@@ -254,6 +275,9 @@ if uploaded_file is not None:
     elif feature_type == "ORB":
         image = feature_orb(image)
 
-    st.image(image, caption="Imagem Processada", use_column_width=True)
+    # Mostrar imagem final (exceto segmentação de canais, que já mostra individualmente)
+    if segmentation_type not in ["Segmentação por Canais RGB/HSV"]:
+        st.image(image, caption="Imagem Processada", use_container_width=True)
+
 else:
     st.write("Por favor, carregue uma imagem para começar.")
