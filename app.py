@@ -130,10 +130,16 @@ def segment_watershed(image):
 
 def segment_superpixel(image, n_segments):
     img = ensure_rgb(image)
-    segments = slic(img, n_segments=n_segments, compactness=10, start_label=1)
-    segmented_img = label2rgb(segments, img, kind='avg')
-    segmented_img = np.uint8(segmented_img*255)
+    img_np = np.array(img)
+    # Normalizar para float entre 0 e 1
+    img_float = img_np / 255.0
+    segments = slic(img_float, n_segments=n_segments, compactness=10, start_label=1)
+    # kind='avg' para usar cor média, preserve_range=True para manter valores
+    segmented_img = label2rgb(segments, img_float, kind='avg', bg_label=0, preserve_range=True)
+    # Converter de volta para uint8
+    segmented_img = np.uint8(segmented_img * 255)
     return Image.fromarray(segmented_img)
+
 
 # ===============================================================
 # 🔍 Filtros de Detecção de Características
