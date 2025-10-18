@@ -101,7 +101,6 @@ def segment_color(image, selected_rgb, hue_tol=15, sat_tol=50, val_tol=50, smoot
     img = ensure_rgb(image)
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
-    # Converte cor para HSV
     color_bgr = np.uint8([[selected_rgb[::-1]]])
     hsv_color = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2HSV)[0][0]
     h, s, v = hsv_color
@@ -151,17 +150,23 @@ def feature_harris(image, block_size=2, ksize=3, k=0.04):
 
 def feature_shi_tomasi(image, max_corners=100):
     gray = ensure_grayscale(image)
-    corners = cv2.goodFeaturesToTrack(gray, max_corners, 0.01, 10)
     result = ensure_rgb(image).copy()
 
-    if corners is not None:
-        corners = np.int0(corners)
-        for c in corners:
-            x, y = c.ravel()
-            cv2.circle(result, (x, y), 3, (0, 255, 0), -1)
-    # Se não houver cantos, retorna a imagem original sem erro
-    return Image.fromarray(result)
+    h, w = gray.shape
+    if h < 2 or w < 2:
+        return Image.fromarray(result)
 
+    try:
+        corners = cv2.goodFeaturesToTrack(gray, max_corners, qualityLevel=0.01, minDistance=10)
+        if corners is not None:
+            corners = np.int0(corners)
+            for c in corners:
+                x, y = c.ravel()
+                cv2.circle(result, (x, y), 3, (0, 255, 0), -1)
+    except cv2.error:
+        pass
+
+    return Image.fromarray(result)
 
 def feature_orb(image, max_features=300):
     img = ensure_rgb(image)
@@ -207,7 +212,6 @@ if segmentation_type == "Segmentação por Cor (HSV)":
     val_tol = st.sidebar.slider("Tolerância Brilho ±",0,128,50)
     smooth = st.sidebar.checkbox("Suavizar máscara", value=True)
 
-# Filtros de Detecção de Características
 st.sidebar.subheader("Filtros de Detecção de Características")
 feature_type = st.sidebar.selectbox(
     "Selecionar Filtro de Características",
