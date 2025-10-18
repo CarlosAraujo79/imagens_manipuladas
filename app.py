@@ -112,7 +112,7 @@ def segment_contours(image):
     edges = cv2.Canny(gray, 100, 200)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     result = ensure_rgb(image).copy()
-    cv2.drawContours(result, contours, -1, (0, 255, 0), 2)
+    cv2.drawContours(result, contours, -1, (255, 0, 0), 2)
     return Image.fromarray(result)
 
 def segment_rgb_channels(image):
@@ -148,7 +148,7 @@ def segment_watershed(image):
     markers[unknown==255] = 0
     markers = cv2.watershed(img, markers)
     result = img.copy()
-    result[markers == -1] = [255, 0, 0]
+    result[markers == -1] = [0, 255, 0]
     return Image.fromarray(result)
 
 def segment_superpixel(image, n_segments):
