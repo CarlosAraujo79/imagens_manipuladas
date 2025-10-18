@@ -222,7 +222,7 @@ if uploaded_file is not None:
         r_img, g_img, b_img = segment_rgb_channels(image)
     
         # Usando colunas para organizar os canais RGB
-        cols_rgb = st.columns(3)
+        cols_rgb = st.columns(1)
         cols_rgb[0].image(r_img, caption="R", use_container_width=True)
         cols_rgb[1].image(g_img, caption="G", use_container_width=True)
         cols_rgb[2].image(b_img, caption="B", use_container_width=True)
@@ -231,7 +231,7 @@ if uploaded_file is not None:
         h_img, s_img, v_img = segment_hsv_channels(image)
     
         # Colunas para HSV
-        cols_hsv = st.columns(3)
+        cols_hsv = st.columns(1)
         cols_hsv[0].image(h_img, caption="H", use_container_width=True)
         cols_hsv[1].image(s_img, caption="S", use_container_width=True)
         cols_hsv[2].image(v_img, caption="V", use_container_width=True)
