@@ -97,19 +97,25 @@ def segment_contours(image):
 # 🎯 Segmentação por Cor Aprimorada
 # ===============================================================
 
-def segment_color(image, selected_rgb, hue_tol=15, sat_tol=50, val_tol=50, smooth=True):
-    img = ensure_rgb(image)  # garante RGB
+def segment_color(image, selected_rgb, hue_tol=20, sat_tol=80, val_tol=80, smooth=True):
+    img = ensure_rgb(image)
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
     color_bgr = np.uint8([[selected_rgb[::-1]]])
     hsv_color = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2HSV)[0][0]
     h, s, v = hsv_color
 
-    sat_tol = min(sat_tol, 255 - s)
-    val_tol = min(val_tol, 255 - v)
-
-    lower = np.array([max(0, h - hue_tol), max(0, s - sat_tol), max(0, v - val_tol)], dtype=np.uint8)
-    upper = np.array([min(179, h + hue_tol), min(255, s + sat_tol), min(255, v + val_tol)], dtype=np.uint8)
+    # Ajusta tolerância mínima
+    lower = np.array([
+        max(0, h - hue_tol),
+        max(0, s - sat_tol),
+        max(0, v - val_tol)
+    ], dtype=np.uint8)
+    upper = np.array([
+        min(179, h + hue_tol),
+        min(255, s + sat_tol),
+        min(255, v + val_tol)
+    ], dtype=np.uint8)
 
     mask = cv2.inRange(hsv, lower, upper)
 
@@ -121,6 +127,7 @@ def segment_color(image, selected_rgb, hue_tol=15, sat_tol=50, val_tol=50, smoot
 
     segmented = cv2.bitwise_and(img, img, mask=mask)
     return Image.fromarray(segmented), Image.fromarray(mask)
+
 
 # ===============================================================
 # 🔍 Filtros de Detecção de Características
