@@ -97,29 +97,47 @@ def segment_contours(image):
     cv2.drawContours(result, contours, -1, (255, 0, 0), 2)
     return Image.fromarray(result)
 
-def segment_color(image, selected_rgb, tolerance):
+
+# ===============================================================
+# 🎯 Segmentação por Cor (Versão Aprimorada)
+# ===============================================================
+
+def segment_color(image, selected_rgb, hue_tol=15, sat_tol=80, val_tol=80):
+    """
+    Segmenta a imagem com base em uma cor selecionada (RGB),
+    convertendo para HSV e aplicando faixas de tolerância ajustáveis.
+    """
     img = ensure_rgb(image)
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
-    # Converte a cor escolhida para HSV
+    # Converte cor base (RGB -> HSV)
     color_bgr = np.uint8([[selected_rgb[::-1]]])  # RGB → BGR
     hsv_color = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2HSV)[0][0]
 
-    # Define faixa de tolerância
+    # Define faixa de tolerância (Hue, Saturation, Value)
     lower_hsv = np.array([
-        max(0, hsv_color[0] - tolerance),
-        max(0, hsv_color[1] - 50),
-        max(0, hsv_color[2] - 50)
+        max(0, hsv_color[0] - hue_tol),
+        max(0, hsv_color[1] - sat_tol),
+        max(0, hsv_color[2] - val_tol)
     ])
     upper_hsv = np.array([
-        min(179, hsv_color[0] + tolerance),
-        min(255, hsv_color[1] + 50),
-        min(255, hsv_color[2] + 50)
+        min(179, hsv_color[0] + hue_tol),
+        min(255, hsv_color[1] + sat_tol),
+        min(255, hsv_color[2] + val_tol)
     ])
 
-    # Cria máscara
+    # Cria máscara binária
     mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+
+    # Suaviza máscara (remoção de ruído e bordas)
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask = cv2.GaussianBlur(mask, (5, 5), 0)
+
+    # Aplica máscara na imagem
     segmented = cv2.bitwise_and(img, img, mask=mask)
+
     return Image.fromarray(segmented), Image.fromarray(mask)
 
 
@@ -130,18 +148,24 @@ def segment_color(image, selected_rgb, tolerance):
 st.sidebar.title("Configurações")
 uploaded_file = st.sidebar.file_uploader("Escolha uma imagem", type=["jpg", "jpeg", "png"])
 
+# Quantização de cores
 num_colors = st.sidebar.slider("Número de Cores para Quantização", 1, 256, 16)
+
+# Transformações geométricas
 rotation = st.sidebar.slider("Rotacionar Imagem (graus)", 0, 360, 0)
 flip = st.sidebar.checkbox("Espelhar Imagem Horizontalmente")
+
+# Escala de cinza
 grayscale = st.sidebar.checkbox("Converter para Escala de Cinza")
 
+# Filtros de ruído
 filter_type = st.sidebar.selectbox(
     "Tipo de Filtro de Ruído",
     ["Nenhum", "Média (Blur)", "Gaussian Blur", "Mediana", "Bilateral"]
 )
 kernel_size = st.sidebar.slider("Tamanho do Kernel (ímpar)", 1, 15, 3, step=2)
 
-# --- Segmentação ---
+# Segmentação
 st.sidebar.subheader("Abordagens de Segmentação")
 segmentation_type = st.sidebar.selectbox(
     "Tipo de Segmentação",
@@ -152,32 +176,42 @@ segmentation_type = st.sidebar.selectbox(
 threshold_value = st.sidebar.slider("Valor do Limiar (para Limiarização)", 0, 255, 127)
 k_value = st.sidebar.slider("Número de Clusters (para K-Means)", 2, 10, 3)
 
-# --- Segmentação por Cor ---
+# Segmentação por Cor
 if segmentation_type == "Segmentação por Cor (HSV)":
     st.sidebar.markdown("### Escolha a Cor Base")
     selected_color = st.sidebar.color_picker("Selecione uma cor", "#00ff00")  # Verde padrão
     selected_rgb = tuple(int(selected_color.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
-    tolerance = st.sidebar.slider("Tolerância da Cor (Hue ±)", 0, 50, 20)
+
+    st.sidebar.markdown("### Ajuste de Tolerâncias")
+    hue_tol = st.sidebar.slider("Tolerância de Matiz (Hue ±)", 0, 50, 15)
+    sat_tol = st.sidebar.slider("Tolerância de Saturação (±)", 0, 128, 80)
+    val_tol = st.sidebar.slider("Tolerância de Brilho (±)", 0, 128, 80)
+
 
 # ===============================================================
-# 🚀 Processamento
+# 🚀 Processamento da Imagem
 # ===============================================================
 
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
+
+    # Quantização
     image = quantize_image(image, num_colors)
 
+    # Escala de cinza (opcional)
     if grayscale:
         image = convert_to_grayscale(image)
 
+    # Transformações
     image = apply_geometric_transform(image, rotation, flip)
 
+    # Filtro de ruído
     if filter_type != "Nenhum":
         image = apply_noise_filter(image, filter_type, kernel_size)
 
     mask_image = None
 
-    # --- Segmentação ---
+    # Segmentação
     if segmentation_type == "Limiarização Simples":
         image = segment_threshold(image, threshold_value)
     elif segmentation_type == "Limiarização Adaptativa":
@@ -189,11 +223,13 @@ if uploaded_file is not None:
     elif segmentation_type == "Contornos":
         image = segment_contours(image)
     elif segmentation_type == "Segmentação por Cor (HSV)":
-        image, mask_image = segment_color(image, selected_rgb, tolerance)
+        image, mask_image = segment_color(image, selected_rgb, hue_tol, sat_tol, val_tol)
 
     # Exibe resultado
     st.image(image, caption="Imagem Processada", use_column_width=True)
+
     if mask_image is not None:
         st.image(mask_image, caption="Máscara da Segmentação", use_column_width=True)
+
 else:
     st.write("Por favor, carregue uma imagem para começar.")
