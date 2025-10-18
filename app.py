@@ -12,7 +12,6 @@ def quantize_image(image, num_colors):
 
 def convert_to_grayscale(image):
     return ImageOps.grayscale(image)
-    image = ImageOps.grayscale(image)
 
 def apply_geometric_transform(image, rotation, flip):
     if flip:
@@ -45,13 +44,20 @@ def apply_noise_filter(image, filter_type, kernel_size):
 # Funções de segmentação
 # --------------------------
 
+def ensure_grayscale(image):
+    """Garante que a imagem esteja em escala de cinza (2D)."""
+    img_array = np.array(image)
+    if len(img_array.shape) == 3:  # Se tiver 3 canais (RGB)
+        return cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+    return img_array  # Já está em escala de cinza
+
 def segment_threshold(image, threshold_value):
-    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    gray = ensure_grayscale(image)
     _, thresh = cv2.threshold(gray, threshold_value, 255, cv2.THRESH_BINARY)
     return Image.fromarray(thresh)
 
 def segment_adaptive(image):
-    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    gray = ensure_grayscale(image)
     adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
                                      cv2.THRESH_BINARY, 11, 2)
     return Image.fromarray(adaptive)
@@ -68,12 +74,12 @@ def segment_kmeans(image, k):
     return Image.fromarray(segmented_image)
 
 def segment_edges(image):
-    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    gray = ensure_grayscale(image)
     edges = cv2.Canny(gray, 100, 200)
     return Image.fromarray(edges)
 
 def segment_contours(image):
-    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    gray = ensure_grayscale(image)
     edges = cv2.Canny(gray, 100, 200)
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     result = np.array(image).copy()
@@ -81,7 +87,7 @@ def segment_contours(image):
     return Image.fromarray(result)
 
 # --------------------------
-# NOVO: Segmentação por cor
+# Segmentação por cor
 # --------------------------
 
 def segment_color(image, lower_hsv, upper_hsv):
