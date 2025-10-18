@@ -221,20 +221,21 @@ if uploaded_file is not None:
         st.subheader("Canais RGB")
         r_img, g_img, b_img = segment_rgb_channels(image)
     
-        # Usando colunas para organizar os canais RGB
-        cols_rgb = st.columns(1)
-        cols_rgb[0].image(r_img, caption="R", use_container_width=True)
-        cols_rgb[1].image(g_img, caption="G", use_container_width=True)
-        cols_rgb[2].image(b_img, caption="B", use_container_width=True)
+        # Cada canal em sua própria coluna (1 imagem por coluna)
+        col1, col2, col3 = st.columns(3)
+        col1.image(r_img, caption="R", use_container_width=True)
+        col2.image(g_img, caption="G", use_container_width=True)
+        col3.image(b_img, caption="B", use_container_width=True)
     
         st.subheader("Canais HSV")
         h_img, s_img, v_img = segment_hsv_channels(image)
     
-        # Colunas para HSV
-        cols_hsv = st.columns(1)
-        cols_hsv[0].image(h_img, caption="H", use_container_width=True)
-        cols_hsv[1].image(s_img, caption="S", use_container_width=True)
-        cols_hsv[2].image(v_img, caption="V", use_container_width=True)
+        # Cada canal em sua própria coluna
+        col4, col5, col6 = st.columns(3)
+        col4.image(h_img, caption="H", use_container_width=True)
+        col5.image(s_img, caption="S", use_container_width=True)
+        col6.image(v_img, caption="V", use_container_width=True)
+
 
 
 
