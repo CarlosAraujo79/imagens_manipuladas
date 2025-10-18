@@ -40,9 +40,8 @@ def apply_noise_filter(image, filter_type, kernel_size):
         filtered = cv2.cvtColor(filtered, cv2.COLOR_BGR2RGB)
     return Image.fromarray(filtered)
 
-
 # --------------------------
-# NOVO: Funções de segmentação
+# Funções de segmentação
 # --------------------------
 
 def segment_threshold(image, threshold_value):
@@ -81,6 +80,17 @@ def segment_contours(image):
     return Image.fromarray(result)
 
 # --------------------------
+# NOVO: Segmentação por cor
+# --------------------------
+
+def segment_color(image, lower_hsv, upper_hsv):
+    img = np.array(image)
+    hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
+    mask = cv2.inRange(hsv, np.array(lower_hsv), np.array(upper_hsv))
+    segmented = cv2.bitwise_and(img, img, mask=mask)
+    return Image.fromarray(segmented)
+
+# --------------------------
 # Interface Streamlit
 # --------------------------
 
@@ -98,15 +108,27 @@ filter_type = st.sidebar.selectbox(
 )
 kernel_size = st.sidebar.slider("Tamanho do Kernel (ímpar)", 1, 15, 3, step=2)
 
-# --- NOVO: Segmentação ---
+# --- Segmentação ---
 st.sidebar.subheader("Abordagens de Segmentação")
 segmentation_type = st.sidebar.selectbox(
     "Tipo de Segmentação",
-    ["Nenhum", "Limiarização Simples", "Limiarização Adaptativa", "K-Means", "Detecção de Bordas (Canny)", "Contornos"]
+    ["Nenhum", "Limiarização Simples", "Limiarização Adaptativa", "K-Means",
+     "Detecção de Bordas (Canny)", "Contornos", "Segmentação por Cor (HSV)"]
 )
 
+# Parâmetros para segmentações específicas
 threshold_value = st.sidebar.slider("Valor do Limiar (para Limiarização)", 0, 255, 127)
 k_value = st.sidebar.slider("Número de Clusters (para K-Means)", 2, 10, 3)
+
+# --- NOVO: controles HSV ---
+if segmentation_type == "Segmentação por Cor (HSV)":
+    st.sidebar.markdown("### Intervalo HSV")
+    lower_h = st.sidebar.slider("Hue (min)", 0, 179, 0)
+    upper_h = st.sidebar.slider("Hue (max)", 0, 179, 179)
+    lower_s = st.sidebar.slider("Saturação (min)", 0, 255, 50)
+    upper_s = st.sidebar.slider("Saturação (max)", 0, 255, 255)
+    lower_v = st.sidebar.slider("Valor (min)", 0, 255, 50)
+    upper_v = st.sidebar.slider("Valor (max)", 0, 255, 255)
 
 # --------------------------
 # Processamento
@@ -114,7 +136,6 @@ k_value = st.sidebar.slider("Número de Clusters (para K-Means)", 2, 10, 3)
 
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
-
     image = quantize_image(image, num_colors)
 
     if grayscale:
@@ -136,6 +157,10 @@ if uploaded_file is not None:
         image = segment_edges(image)
     elif segmentation_type == "Contornos":
         image = segment_contours(image)
+    elif segmentation_type == "Segmentação por Cor (HSV)":
+        lower = (lower_h, lower_s, lower_v)
+        upper = (upper_h, upper_s, upper_v)
+        image = segment_color(image, lower, upper)
 
     st.image(image, caption="Imagem Processada", use_column_width=True)
 else:
