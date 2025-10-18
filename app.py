@@ -1,17 +1,18 @@
 import streamlit as st
-from PIL import Image, ImageOps, ImageFilter
+from PIL import Image, ImageOps
 import numpy as np
 import cv2
 
-# Função para quantização de cores
+# --------------------------
+# Funções existentes
+# --------------------------
+
 def quantize_image(image, num_colors):
     return image.convert('P', palette=Image.ADAPTIVE, colors=num_colors).convert('RGB')
 
-# Função para converter imagem para escala de cinza
 def convert_to_grayscale(image):
     return ImageOps.grayscale(image)
 
-# Função para aplicar transformações geométricas
 def apply_geometric_transform(image, rotation, flip):
     if flip:
         image = ImageOps.mirror(image)
@@ -19,15 +20,9 @@ def apply_geometric_transform(image, rotation, flip):
         image = image.rotate(rotation)
     return image
 
-# Função para aplicar filtros de ruído
 def apply_noise_filter(image, filter_type, kernel_size):
-    # Converte PIL para OpenCV (numpy array)
     img_array = np.array(image)
-
-    # Se imagem for em escala de cinza, mantém 2D
-    if len(img_array.shape) == 2:
-        pass
-    else:
+    if len(img_array.shape) == 3:
         img_array = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
 
     if filter_type == "Média (Blur)":
@@ -41,53 +36,107 @@ def apply_noise_filter(image, filter_type, kernel_size):
     else:
         return image
 
-    # Converte de volta para PIL
-    if len(filtered.shape) == 2:
-        return Image.fromarray(filtered)
-    else:
+    if len(filtered.shape) == 3:
         filtered = cv2.cvtColor(filtered, cv2.COLOR_BGR2RGB)
-        return Image.fromarray(filtered)
+    return Image.fromarray(filtered)
 
-# Configurações da barra lateral
+
+# --------------------------
+# NOVO: Funções de segmentação
+# --------------------------
+
+def segment_threshold(image, threshold_value):
+    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    _, thresh = cv2.threshold(gray, threshold_value, 255, cv2.THRESH_BINARY)
+    return Image.fromarray(thresh)
+
+def segment_adaptive(image):
+    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    adaptive = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+                                     cv2.THRESH_BINARY, 11, 2)
+    return Image.fromarray(adaptive)
+
+def segment_kmeans(image, k):
+    img = np.array(image)
+    Z = img.reshape((-1, 3))
+    Z = np.float32(Z)
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
+    _, labels, centers = cv2.kmeans(Z, k, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
+    centers = np.uint8(centers)
+    segmented = centers[labels.flatten()]
+    segmented_image = segmented.reshape((img.shape))
+    return Image.fromarray(segmented_image)
+
+def segment_edges(image):
+    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    edges = cv2.Canny(gray, 100, 200)
+    return Image.fromarray(edges)
+
+def segment_contours(image):
+    gray = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2GRAY)
+    edges = cv2.Canny(gray, 100, 200)
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    result = np.array(image).copy()
+    cv2.drawContours(result, contours, -1, (255, 0, 0), 2)
+    return Image.fromarray(result)
+
+# --------------------------
+# Interface Streamlit
+# --------------------------
+
 st.sidebar.title("Configurações")
 uploaded_file = st.sidebar.file_uploader("Escolha uma imagem", type=["jpg", "jpeg", "png"])
 
-# Configurações de quantização de cores
 num_colors = st.sidebar.slider("Número de Cores para Quantização", 1, 256, 16)
-
-# Configurações de transformação geométrica
 rotation = st.sidebar.slider("Rotacionar Imagem (graus)", 0, 360, 0)
 flip = st.sidebar.checkbox("Espelhar Imagem Horizontalmente")
-
-# Configurações de conversão de sistema de cores
 grayscale = st.sidebar.checkbox("Converter para Escala de Cinza")
 
-# --- NOVO: Tipos de filtragem de ruído ---
 filter_type = st.sidebar.selectbox(
     "Tipo de Filtro de Ruído",
     ["Nenhum", "Média (Blur)", "Gaussian Blur", "Mediana", "Bilateral"]
 )
 kernel_size = st.sidebar.slider("Tamanho do Kernel (ímpar)", 1, 15, 3, step=2)
 
-# Se uma imagem foi carregada, processa a imagem
+# --- NOVO: Segmentação ---
+st.sidebar.subheader("Abordagens de Segmentação")
+segmentation_type = st.sidebar.selectbox(
+    "Tipo de Segmentação",
+    ["Nenhum", "Limiarização Simples", "Limiarização Adaptativa", "K-Means", "Detecção de Bordas (Canny)", "Contornos"]
+)
+
+threshold_value = st.sidebar.slider("Valor do Limiar (para Limiarização)", 0, 255, 127)
+k_value = st.sidebar.slider("Número de Clusters (para K-Means)", 2, 10, 3)
+
+# --------------------------
+# Processamento
+# --------------------------
+
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
 
-    # Aplica quantização de cores
     image = quantize_image(image, num_colors)
 
-    # Converte para escala de cinza, se necessário
     if grayscale:
         image = convert_to_grayscale(image)
 
-    # Aplica transformações geométricas
     image = apply_geometric_transform(image, rotation, flip)
 
-    # Aplica filtro de ruído, se selecionado
     if filter_type != "Nenhum":
         image = apply_noise_filter(image, filter_type, kernel_size)
 
-    # Exibe imagem processada
+    # --- Segmentação ---
+    if segmentation_type == "Limiarização Simples":
+        image = segment_threshold(image, threshold_value)
+    elif segmentation_type == "Limiarização Adaptativa":
+        image = segment_adaptive(image)
+    elif segmentation_type == "K-Means":
+        image = segment_kmeans(image, k_value)
+    elif segmentation_type == "Detecção de Bordas (Canny)":
+        image = segment_edges(image)
+    elif segmentation_type == "Contornos":
+        image = segment_contours(image)
+
     st.image(image, caption="Imagem Processada", use_column_width=True)
 else:
     st.write("Por favor, carregue uma imagem para começar.")
