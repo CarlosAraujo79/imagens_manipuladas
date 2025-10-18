@@ -148,7 +148,7 @@ def segment_watershed(image):
     markers[unknown==255] = 0
     markers = cv2.watershed(img, markers)
     result = img.copy()
-    result[markers == -1] = [0, 255, 0]
+    result[markers == -1] = [255, 0, 255]
     return Image.fromarray(result)
 
 def segment_superpixel(image, n_segments):
