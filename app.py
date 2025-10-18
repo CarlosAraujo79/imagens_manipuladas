@@ -130,14 +130,12 @@ def segment_watershed(image):
 
 def segment_superpixel(image, n_segments):
     img = ensure_rgb(image)
-    img_np = np.array(img)
-    # Normalizar para float entre 0 e 1
-    img_float = img_np / 255.0
-    segments = slic(img_float, n_segments=n_segments, compactness=10, start_label=1)
-    # kind='avg' para usar cor média, preserve_range=True para manter valores
-    segmented_img = label2rgb(segments, img_float, kind='avg', bg_label=0, preserve_range=True)
-    # Converter de volta para uint8
-    segmented_img = np.uint8(segmented_img * 255)
+    img_np = np.array(img, dtype=np.float32) / 255.0  # Normaliza para [0,1]
+    segments = slic(img_np, n_segments=n_segments, compactness=10, start_label=1)
+    # kind='avg' faz com que cada superpixel tenha a cor média
+    segmented_img = label2rgb(segments, img_np, kind='avg', bg_label=0)
+    # Voltar para uint8 [0,255]
+    segmented_img = np.clip(segmented_img * 255, 0, 255).astype(np.uint8)
     return Image.fromarray(segmented_img)
 
 
