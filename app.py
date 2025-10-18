@@ -91,33 +91,24 @@ def segment_contours(image):
     return Image.fromarray(result)
 
 # ===============================================================
-# 🎯 Nova Segmentação por Cor (HSV)
+# 🌈 Segmentação por canais RGB e HSV
 # ===============================================================
-def segment_color(image, target_rgb, hue_tol=20, sat_tol=80, val_tol=80, smooth=True):
+def segment_rgb_channels(image):
+    img = ensure_rgb(image)
+    r, g, b = cv2.split(img)
+    r_img = cv2.merge([r, np.zeros_like(r), np.zeros_like(r)])
+    g_img = cv2.merge([np.zeros_like(g), g, np.zeros_like(g)])
+    b_img = cv2.merge([np.zeros_like(b), np.zeros_like(b), b])
+    return Image.fromarray(r_img), Image.fromarray(g_img), Image.fromarray(b_img)
+
+def segment_hsv_channels(image):
     img = ensure_rgb(image)
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
-
-    color_bgr = np.uint8([[target_rgb[::-1]]])
-    hsv_color = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2HSV)[0][0]
-    h, s, v = hsv_color
-
-    lower = np.array([max(0, h - hue_tol),
-                      max(0, s - sat_tol),
-                      max(0, v - val_tol)], dtype=np.uint8)
-    upper = np.array([min(179, h + hue_tol),
-                      min(255, s + sat_tol),
-                      min(255, v + val_tol)], dtype=np.uint8)
-
-    mask = cv2.inRange(hsv, lower, upper)
-
-    if smooth:
-        kernel = np.ones((5,5), np.uint8)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
-        mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
-        mask = cv2.GaussianBlur(mask, (7,7), 0)
-
-    segmented = cv2.bitwise_and(img, img, mask=mask)
-    return Image.fromarray(segmented), Image.fromarray(mask)
+    h, s, v = cv2.split(hsv)
+    h_img = cv2.merge([h, h, h])
+    s_img = cv2.merge([s, s, s])
+    v_img = cv2.merge([v, v, v])
+    return Image.fromarray(h_img), Image.fromarray(s_img), Image.fromarray(v_img)
 
 # ===============================================================
 # 🔍 Filtros de Detecção de Características
@@ -170,7 +161,7 @@ def feature_orb(image, max_features=300):
     return Image.fromarray(result)
 
 # ===============================================================
-# 🌈 Interface Streamlit
+# 🌟 Interface Streamlit
 # ===============================================================
 st.sidebar.title("Configurações")
 uploaded_file = st.sidebar.file_uploader("Escolha uma imagem", type=["jpg","jpeg","png"])
@@ -190,20 +181,10 @@ st.sidebar.subheader("Abordagens de Segmentação")
 segmentation_type = st.sidebar.selectbox(
     "Tipo de Segmentação",
     ["Nenhum","Limiarização Simples","Limiarização Adaptativa","K-Means",
-     "Detecção de Bordas (Canny)","Contornos","Segmentação por Cor (HSV)"]
+     "Detecção de Bordas (Canny)","Contornos","Segmentação por Canais RGB/HSV"]
 )
 threshold_value = st.sidebar.slider("Valor do Limiar", 0, 255, 127)
 k_value = st.sidebar.slider("Número de Clusters (K-Means)", 2, 10, 3)
-
-# Segmentação por Cor
-if segmentation_type == "Segmentação por Cor (HSV)":
-    st.sidebar.subheader("Segmentação por Cor (HSV)")
-    selected_color = st.sidebar.color_picker("Escolha a cor base", "#00ff00")
-    target_rgb = tuple(int(selected_color.lstrip("#")[i:i+2],16) for i in (0,2,4))
-    hue_tol = st.sidebar.slider("Tolerância Hue ±", 0, 60, 20)
-    sat_tol = st.sidebar.slider("Tolerância Saturação ±", 0, 128, 80)
-    val_tol = st.sidebar.slider("Tolerância Brilho ±", 0, 128, 80)
-    smooth_mask = st.sidebar.checkbox("Suavizar máscara", True)
 
 st.sidebar.subheader("Filtros de Detecção de Características")
 feature_type = st.sidebar.selectbox(
@@ -236,8 +217,14 @@ if uploaded_file is not None:
         image = segment_edges(image)
     elif segmentation_type == "Contornos":
         image = segment_contours(image)
-    elif segmentation_type == "Segmentação por Cor (HSV)":
-        image, mask_image = segment_color(image, target_rgb, hue_tol, sat_tol, val_tol, smooth_mask)
+    elif segmentation_type == "Segmentação por Canais RGB/HSV":
+        st.subheader("Canais RGB")
+        r_img, g_img, b_img = segment_rgb_channels(image)
+        st.image([r_img, g_img, b_img], caption=["R","G","B"], width=200)
+
+        st.subheader("Canais HSV")
+        h_img, s_img, v_img = segment_hsv_channels(image)
+        st.image([h_img, s_img, v_img], caption=["H","S","V"], width=200)
 
     # Conversão para grayscale (após segmentação)
     if grayscale:
@@ -256,7 +243,5 @@ if uploaded_file is not None:
         image = feature_orb(image)
 
     st.image(image, caption="Imagem Processada", use_column_width=True)
-    if mask_image is not None:
-        st.image(mask_image, caption="Máscara da Segmentação", use_column_width=True)
 else:
     st.write("Por favor, carregue uma imagem para começar.")
