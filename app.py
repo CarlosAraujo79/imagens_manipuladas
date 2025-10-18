@@ -1,5 +1,5 @@
 import streamlit as st
-from PIL import Image, ImageOps
+from PIL import Image, ImageOps, ImageEnhance
 import numpy as np
 import cv2
 from skimage.segmentation import slic
@@ -53,6 +53,29 @@ def apply_noise_filter(image, filter_type, kernel_size):
 
     filtered = cv2.cvtColor(filtered, cv2.COLOR_BGR2RGB)
     return Image.fromarray(filtered)
+
+def enhance_contrast(image, factor=1.5):
+    enhancer = ImageEnhance.Contrast(image)
+    return enhancer.enhance(factor)
+
+def apply_morphology(image, operation, kernel_size=3, iterations=1):
+    img_array = ensure_grayscale(image)
+    kernel = np.ones((kernel_size, kernel_size), np.uint8)
+
+    if operation == "Erosão":
+        result = cv2.erode(img_array, kernel, iterations=iterations)
+    elif operation == "Dilatação":
+        result = cv2.dilate(img_array, kernel, iterations=iterations)
+    elif operation == "Abertura":
+        result = cv2.morphologyEx(img_array, cv2.MORPH_OPEN, kernel, iterations=iterations)
+    elif operation == "Fechamento":
+        result = cv2.morphologyEx(img_array, cv2.MORPH_CLOSE, kernel, iterations=iterations)
+    elif operation == "Gradiente":
+        result = cv2.morphologyEx(img_array, cv2.MORPH_GRADIENT, kernel, iterations=iterations)
+    else:
+        return image
+
+    return Image.fromarray(result)
 
 # ===============================================================
 # 🧠 Funções de Segmentação
@@ -130,14 +153,11 @@ def segment_watershed(image):
 
 def segment_superpixel(image, n_segments):
     img = ensure_rgb(image)
-    img_np = np.array(img, dtype=np.float32) / 255.0  # Normaliza para [0,1]
+    img_np = np.array(img, dtype=np.float32) / 255.0
     segments = slic(img_np, n_segments=n_segments, compactness=10, start_label=1)
-    # kind='avg' faz com que cada superpixel tenha a cor média
     segmented_img = label2rgb(segments, img_np, kind='avg', bg_label=0)
-    # Voltar para uint8 [0,255]
     segmented_img = np.clip(segmented_img * 255, 0, 255).astype(np.uint8)
     return Image.fromarray(segmented_img)
-
 
 # ===============================================================
 # 🔍 Filtros de Detecção de Características
@@ -206,6 +226,15 @@ filter_type = st.sidebar.selectbox(
 )
 kernel_size = st.sidebar.slider("Tamanho do Kernel (ímpar)", 1, 15, 3, step=2)
 
+contrast_factor = st.sidebar.slider("Fator de Contraste", 0.5, 3.0, 1.5, 0.1)
+
+morph_op = st.sidebar.selectbox(
+    "Operação Morfológica",
+    ["Nenhum","Erosão","Dilatação","Abertura","Fechamento","Gradiente"]
+)
+morph_kernel = st.sidebar.slider("Tamanho do Kernel Morfológico", 1, 15, 3, step=2)
+morph_iter = st.sidebar.slider("Iterações Morfológicas", 1, 5, 1)
+
 st.sidebar.subheader("Abordagens de Segmentação")
 segmentation_type = st.sidebar.selectbox(
     "Tipo de Segmentação",
@@ -229,11 +258,17 @@ feature_type = st.sidebar.selectbox(
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
     image = quantize_image(image, num_colors)
-
-    # Aplicar transformações
     image = apply_geometric_transform(image, rotation, flip)
+
     if filter_type != "Nenhum":
         image = apply_noise_filter(image, filter_type, kernel_size)
+
+    # Aplicar contraste
+    image = enhance_contrast(image, contrast_factor)
+
+    # Aplicar morfologia
+    if morph_op != "Nenhum":
+        image = apply_morphology(image, morph_op, morph_kernel, morph_iter)
 
     # Segmentação
     if segmentation_type == "Limiarização Simples":
@@ -263,7 +298,6 @@ if uploaded_file is not None:
     elif segmentation_type == "Superpixel (SLIC)":
         image = segment_superpixel(image, n_superpixels)
 
-    # Conversão para grayscale (após segmentação)
     if grayscale and segmentation_type not in ["Segmentação por Canais RGB/HSV"]:
         image = convert_to_grayscale(image)
 
@@ -279,7 +313,6 @@ if uploaded_file is not None:
     elif feature_type == "ORB":
         image = feature_orb(image)
 
-    # Mostrar imagem final (exceto segmentação de canais, que já mostra individualmente)
     if segmentation_type not in ["Segmentação por Canais RGB/HSV"]:
         st.image(image, caption="Imagem Processada", use_container_width=True)
 
