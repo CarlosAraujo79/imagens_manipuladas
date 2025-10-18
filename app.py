@@ -6,7 +6,6 @@ import cv2
 # ===============================================================
 # 🔧 Funções Utilitárias
 # ===============================================================
-
 def ensure_rgb(image):
     img_array = np.array(image)
     if len(img_array.shape) == 2:
@@ -22,7 +21,6 @@ def ensure_grayscale(image):
 # ===============================================================
 # 🎨 Funções de Processamento Básico
 # ===============================================================
-
 def quantize_image(image, num_colors):
     return image.convert('P', palette=Image.ADAPTIVE, colors=num_colors).convert('RGB')
 
@@ -57,7 +55,6 @@ def apply_noise_filter(image, filter_type, kernel_size):
 # ===============================================================
 # 🧠 Funções de Segmentação
 # ===============================================================
-
 def segment_threshold(image, threshold_value):
     gray = ensure_grayscale(image)
     _, thresh = cv2.threshold(gray, threshold_value, 255, cv2.THRESH_BINARY)
@@ -94,28 +91,22 @@ def segment_contours(image):
     return Image.fromarray(result)
 
 # ===============================================================
-# 🎯 Segmentação por Cor Aprimorada
+# 🎯 Nova Segmentação por Cor (HSV)
 # ===============================================================
-
-def segment_color(image, selected_rgb, hue_tol=20, sat_tol=80, val_tol=80, smooth=True):
+def segment_color(image, target_rgb, hue_tol=20, sat_tol=80, val_tol=80, smooth=True):
     img = ensure_rgb(image)
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
-    color_bgr = np.uint8([[selected_rgb[::-1]]])
+    color_bgr = np.uint8([[target_rgb[::-1]]])
     hsv_color = cv2.cvtColor(color_bgr, cv2.COLOR_BGR2HSV)[0][0]
     h, s, v = hsv_color
 
-    # Ajusta tolerância mínima
-    lower = np.array([
-        max(0, h - hue_tol),
-        max(0, s - sat_tol),
-        max(0, v - val_tol)
-    ], dtype=np.uint8)
-    upper = np.array([
-        min(179, h + hue_tol),
-        min(255, s + sat_tol),
-        min(255, v + val_tol)
-    ], dtype=np.uint8)
+    lower = np.array([max(0, h - hue_tol),
+                      max(0, s - sat_tol),
+                      max(0, v - val_tol)], dtype=np.uint8)
+    upper = np.array([min(179, h + hue_tol),
+                      min(255, s + sat_tol),
+                      min(255, v + val_tol)], dtype=np.uint8)
 
     mask = cv2.inRange(hsv, lower, upper)
 
@@ -128,11 +119,9 @@ def segment_color(image, selected_rgb, hue_tol=20, sat_tol=80, val_tol=80, smoot
     segmented = cv2.bitwise_and(img, img, mask=mask)
     return Image.fromarray(segmented), Image.fromarray(mask)
 
-
 # ===============================================================
 # 🔍 Filtros de Detecção de Características
 # ===============================================================
-
 def feature_sobel(image):
     gray = ensure_grayscale(image)
     grad_x = cv2.Sobel(gray, cv2.CV_64F, 1, 0, ksize=3)
@@ -158,23 +147,19 @@ def feature_harris(image, block_size=2, ksize=3, k=0.04):
 def feature_shi_tomasi(image, max_corners=100):
     gray = ensure_grayscale(image)
     result = ensure_rgb(image).copy()
-
     h, w = gray.shape
     if h < 2 or w < 2:
         return Image.fromarray(result)
-
     try:
         corners = cv2.goodFeaturesToTrack(gray, max_corners, qualityLevel=0.01, minDistance=10)
         if corners is not None:
-            corners = corners.astype(int)  # <- substitui np.int0
+            corners = corners.astype(int)
             for c in corners:
                 x, y = c.ravel()
                 cv2.circle(result, (x, y), 3, (0, 255, 0), -1)
     except cv2.error:
         pass
-
     return Image.fromarray(result)
-
 
 def feature_orb(image, max_features=300):
     img = ensure_rgb(image)
@@ -187,7 +172,6 @@ def feature_orb(image, max_features=300):
 # ===============================================================
 # 🌈 Interface Streamlit
 # ===============================================================
-
 st.sidebar.title("Configurações")
 uploaded_file = st.sidebar.file_uploader("Escolha uma imagem", type=["jpg","jpeg","png"])
 
@@ -213,12 +197,13 @@ k_value = st.sidebar.slider("Número de Clusters (K-Means)", 2, 10, 3)
 
 # Segmentação por Cor
 if segmentation_type == "Segmentação por Cor (HSV)":
+    st.sidebar.subheader("Segmentação por Cor (HSV)")
     selected_color = st.sidebar.color_picker("Escolha a cor base", "#00ff00")
-    selected_rgb = tuple(int(selected_color.lstrip("#")[i:i+2],16) for i in (0,2,4))
-    hue_tol = st.sidebar.slider("Tolerância Hue ±",0,60,15)
-    sat_tol = st.sidebar.slider("Tolerância Saturação ±",0,128,50)
-    val_tol = st.sidebar.slider("Tolerância Brilho ±",0,128,50)
-    smooth = st.sidebar.checkbox("Suavizar máscara", value=True)
+    target_rgb = tuple(int(selected_color.lstrip("#")[i:i+2],16) for i in (0,2,4))
+    hue_tol = st.sidebar.slider("Tolerância Hue ±", 0, 60, 20)
+    sat_tol = st.sidebar.slider("Tolerância Saturação ±", 0, 128, 80)
+    val_tol = st.sidebar.slider("Tolerância Brilho ±", 0, 128, 80)
+    smooth_mask = st.sidebar.checkbox("Suavizar máscara", True)
 
 st.sidebar.subheader("Filtros de Detecção de Características")
 feature_type = st.sidebar.selectbox(
@@ -229,12 +214,11 @@ feature_type = st.sidebar.selectbox(
 # ===============================================================
 # 🚀 Processamento da Imagem
 # ===============================================================
-
 if uploaded_file is not None:
     image = Image.open(uploaded_file)
     image = quantize_image(image, num_colors)
-    if grayscale:
-        image = convert_to_grayscale(image)
+
+    # Aplicar transformações
     image = apply_geometric_transform(image, rotation, flip)
     if filter_type != "Nenhum":
         image = apply_noise_filter(image, filter_type, kernel_size)
@@ -253,7 +237,11 @@ if uploaded_file is not None:
     elif segmentation_type == "Contornos":
         image = segment_contours(image)
     elif segmentation_type == "Segmentação por Cor (HSV)":
-        image, mask_image = segment_color(image, selected_rgb, hue_tol, sat_tol, val_tol, smooth)
+        image, mask_image = segment_color(image, target_rgb, hue_tol, sat_tol, val_tol, smooth_mask)
+
+    # Conversão para grayscale (após segmentação)
+    if grayscale:
+        image = convert_to_grayscale(image)
 
     # Filtros de Características
     if feature_type == "Sobel (Gradiente)":
