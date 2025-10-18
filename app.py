@@ -98,7 +98,7 @@ def segment_contours(image):
 # ===============================================================
 
 def segment_color(image, selected_rgb, hue_tol=15, sat_tol=50, val_tol=50, smooth=True):
-    img = ensure_rgb(image)
+    img = ensure_rgb(image)  # garante RGB
     hsv = cv2.cvtColor(img, cv2.COLOR_RGB2HSV)
 
     color_bgr = np.uint8([[selected_rgb[::-1]]])
@@ -108,8 +108,8 @@ def segment_color(image, selected_rgb, hue_tol=15, sat_tol=50, val_tol=50, smoot
     sat_tol = min(sat_tol, 255 - s)
     val_tol = min(val_tol, 255 - v)
 
-    lower = np.array([max(0, h - hue_tol), max(0, s - sat_tol), max(0, v - val_tol)])
-    upper = np.array([min(179, h + hue_tol), min(255, s + sat_tol), min(255, v + val_tol)])
+    lower = np.array([max(0, h - hue_tol), max(0, s - sat_tol), max(0, v - val_tol)], dtype=np.uint8)
+    upper = np.array([min(179, h + hue_tol), min(255, s + sat_tol), min(255, v + val_tol)], dtype=np.uint8)
 
     mask = cv2.inRange(hsv, lower, upper)
 
