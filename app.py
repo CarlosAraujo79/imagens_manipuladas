@@ -159,7 +159,7 @@ def feature_shi_tomasi(image, max_corners=100):
     try:
         corners = cv2.goodFeaturesToTrack(gray, max_corners, qualityLevel=0.01, minDistance=10)
         if corners is not None:
-            corners = np.int0(corners)
+            corners = corners.astype(int)  # <- substitui np.int0
             for c in corners:
                 x, y = c.ravel()
                 cv2.circle(result, (x, y), 3, (0, 255, 0), -1)
@@ -167,6 +167,7 @@ def feature_shi_tomasi(image, max_corners=100):
         pass
 
     return Image.fromarray(result)
+
 
 def feature_orb(image, max_features=300):
     img = ensure_rgb(image)
