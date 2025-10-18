@@ -1,7 +1,8 @@
 streamlit
-Pillow
+seaborn
+torch
+pillow
 numpy
-opencv-python
-matplotlib
+opencv-python-headless
 pytesseract
-ultralytics
+ultralytics>=8.0.0
