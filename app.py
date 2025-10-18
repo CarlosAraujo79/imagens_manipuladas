@@ -12,6 +12,7 @@ def quantize_image(image, num_colors):
 
 def convert_to_grayscale(image):
     return ImageOps.grayscale(image)
+    image = ImageOps.grayscale(image)
 
 def apply_geometric_transform(image, rotation, flip):
     if flip:
